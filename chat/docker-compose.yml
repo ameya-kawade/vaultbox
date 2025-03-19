@@ -1,0 +1,89 @@
+services:
+
+  chat-app:
+    build: .
+    container_name: chat_app
+    ports:
+      - "3000-3010:3000-3010"
+    depends_on:
+      - redis
+      - mongodb
+      - minio
+      - auth-app
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./.env:/usr/src/app/.env
+    networks:
+      - app-network
+
+  auth-app:
+    build:
+      context: ../auth
+      dockerfile: Dockerfile
+    container_name: vaultbox-auth
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    volumes:
+      - ../auth/src:/usr/src/app/src
+      - ../auth/.env:/usr/src/app/.env
+    networks:
+      - app-network
+    dns:
+      - 8.8.8.8  # Google's DNS
+    extra_hosts:
+      - "smtp.gmail.com:64.233.170.109"
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: ROOTUSER
+      MINIO_ROOT_PASSWORD: CHANGEME123
+      MINIO_DOMAIN: minio
+    volumes:
+      - minio_bucket:/data
+      - ./minio-ssl:/root/.minio/certs
+    command: server /data --console-address ":9001"
+    networks:
+      - app-network
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+  mongodb:
+    image: mongo:4-focal
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+volumes:
+  redis-data:
+    driver: local
+  minio_bucket:
+    driver: local
+  mongodb_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

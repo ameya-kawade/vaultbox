@@ -1,0 +1,23 @@
+{
+  "context": {
+    "user": {
+      "avatar": "your_client_avatar_url",
+      "name": "your_client_name",
+      "email": "your_client_email",
+      "lobby_bypass": false,
+      "role": "participant"
+    }
+  },
+  "aud": "jitsi",
+  "iss": "jitsi",
+  "sub": "jitsi-meet.example.com",
+  "room": "*",
+  "nbf": 1725273413,
+  "exp": 1725277013
+}
+
+
+## JWT Secret
+secret_token
+
+##

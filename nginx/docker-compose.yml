@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  nginx_server:
+    image: nginx:1.27
+    container_name: nginx_server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl

@@ -1,0 +1,210 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  Base layer with LIGHT theme defaults in :root, 
+  and a .dark block for DARK theme overrides.
+*/
+@layer base {
+  :root {
+    --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+    /* LIGHT THEME (default) */
+    --background: 210 20% 98%;   /* Light background */
+    --foreground: 220 10% 10%;   /* Dark text */
+
+    --card: 0 0% 100%;           /* White cards */
+    --card-foreground: 220 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 10% 10%;
+
+    --primary: 201 100% 62%;     /* #3EBCFF */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96.1%;  
+    --secondary-foreground: 220 10% 10%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 210 7% 30%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 220 10% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 201 100% 62%;
+
+    --radius: 0.5rem;
+
+    /* Layout sizing */
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 80px;
+    --header-height: 64px;
+
+    /* Custom colors */
+    --success: 142 72% 29%;
+    --warning: 38 92% 50%;
+    --info: 201 100% 62%;
+  }
+
+  /* DARK THEME overrides */
+  .dark {
+    --background: 220 20% 6%;    /* Dark blue-gray */
+    --foreground: 220 10% 98%;   /* Almost white */
+
+    --card: 220 20% 9%;          
+    --card-foreground: 220 10% 98%;
+    --popover: 220 20% 9%;
+    --popover-foreground: 220 10% 98%;
+
+    --primary: 201 100% 62%;     
+    --primary-foreground: 220 20% 6%;
+
+    --secondary: 220 20% 12%;
+    --secondary-foreground: 220 10% 98%;
+
+    --muted: 220 20% 12%;
+    --muted-foreground: 220 10% 65%;
+
+    --accent: 220 20% 12%;
+    --accent-foreground: 220 10% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 10% 98%;
+
+    --border: 220 20% 14%;
+    --input: 220 20% 14%;
+    --ring: 201 100% 62%;
+
+    --radius: 0.5rem;
+
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 80px;
+    --header-height: 64px;
+  }
+
+  /* Base resets & typography */
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-sans);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* 
+  Additional base styles: 
+  animations, transitions, scrollbars, etc.
+*/
+@layer base {
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  /* Transitions */
+  .transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Card hover effects */
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Notification panel animation */
+  .notification-panel-enter {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  .notification-panel-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 200ms, transform 200ms;
+  }
+  .notification-panel-exit {
+    opacity: 1;
+  }
+  .notification-panel-exit-active {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 200ms, transform 200ms;
+  }
+}
+/* Custom scrollbar styling */
+@layer utilities {
+  .scrollbar-custom {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 3px;
+  }
+}
+
+/* Message animations */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-animation {
+  animation: message-in 0.2s ease-out;
+}
