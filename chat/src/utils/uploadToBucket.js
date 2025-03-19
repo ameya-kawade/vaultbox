@@ -1,13 +1,14 @@
 import * as Minio from 'minio';
 import fs from 'fs';
 import path from 'path';
+import {exec} from 'child_process';
 
 const minioClient = new Minio.Client({
   endPoint: process.env.MINIO_HOST,
   port: parseInt(process.env.MINIO_PORT) || 9000,
   useSSL: process.env.MINIO_USE_SSL === 'true',
-  accessKey: process.env.MINIO_ACCESS_KEY,
-  secretKey: process.env.MINIO_SECRET_KEY,
+  accessKey: process.env.MINIO_ROOT_USER,
+  secretKey: process.env.MINIO_ROOT_PASSWORD,
 });
 
 const uploadToBucket = async (filePath, mimetype) => {
@@ -22,8 +23,10 @@ const uploadToBucket = async (filePath, mimetype) => {
   try {
     // Ensure the bucket exists
     const bucketExists = await minioClient.bucketExists(bucketName);
+
     if (!bucketExists) {
       await minioClient.makeBucket(bucketName);
+      enableBucketEncryption(bucketName);
     }
 
     // Prepare metadata
@@ -32,6 +35,7 @@ const uploadToBucket = async (filePath, mimetype) => {
       'X-Amz-Meta-Original-Filename': fileName,
       'X-Amz-Meta-File-Size': fileSize.toString(),
       'X-Amz-Meta-Upload-Date': new Date().toISOString(),
+      'x-amz-server-side-encryption': 'AES256', // Enable SSE-S3
     };
 
     // Upload the file to Minio with metadata
@@ -49,4 +53,19 @@ const uploadToBucket = async (filePath, mimetype) => {
   }
 };
 
+const enableBucketEncryption = (bucketName) =>{
+  
+  const command = `mc encrypt set sse-s3 myminio/${bucketName} --insecure`;
+
+  exec(command, (error, stdout, stderr)=>{
+    if(error){
+       console.error(`Error enabling encryption: ${stderr}`);
+      throw error;
+    }
+    console.log(`Encryption enabled for bucket: ${bucketName}`);
+  });
+
+};
+
 export default uploadToBucket;
+

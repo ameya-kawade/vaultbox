@@ -5,8 +5,8 @@ const renewPresignedUrl = async (objectName, bucketName) => {
     endPoint: process.env.MINIO_ENDPOINT,
     port: parseInt(process.env.MINIO_PORT, 10),
     useSSL: process.env.MINIO_USE_SSL === 'true',
-    accessKey: process.env.MINIO_ACCESS_KEY,
-    secretKey: process.env.MINIO_SECRET_KEY,
+    accessKey: process.env.MINIO_ROOT_USER,
+    secretKey: process.env.MINIO_ROOT_PASSWORD,
   });
 
   const expirationInSeconds = 7 * 24 * 60 * 60; // 7 days

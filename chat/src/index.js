@@ -9,11 +9,26 @@ import Redis from 'ioredis';
 import { messagesHandler } from './controllers/socketHandlers/messagesHandler.js';
 import { channelsHandler, removeUserFromChannels, joinUserToChannels } from './controllers/socketHandlers/channelsHandler.js';
 import { assignSocketId } from './controllers/socketHandlers/socketUtils.js';
+import { exec } from 'child_process';
 
 const numCPUs = cpus().length;
 
 if (cluster.isPrimary) {
+  
   console.log(`Master ${process.pid} is running`);
+  
+  const command = `mc alias set myminio https://minio:9000 ${process.env.MINIO_ROOT_USER} ${process.env.MINIO_ROOT_PASSWORD} --insecure`;
+  exec(command, (error, stdout, stderr)=> {
+    
+    if(error){
+      console.error(`Error setting up mc alias: ${stderr}`);
+      process.exit(1);  
+    }
+
+    console.log('mc alias configured successfully.');
+  
+  });   
+
   for (let i = 0; i < numCPUs; i++) {
     const worker = cluster.fork();
     worker.port = 3000 + i;

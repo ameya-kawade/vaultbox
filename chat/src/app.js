@@ -15,9 +15,9 @@ app.use( '/static', express.static( join(__dirname, 'public') ) );
 
 // Routers
 
-app.use('/channels', channelsRouter);
-app.use('/messages', messagesRouter);
-app.use('/user', userRouter);
+app.use('/chat_api/channels', channelsRouter);
+app.use('/chat_api/messages', messagesRouter);
+app.use('/chat_api/user', userRouter);
 
 // Default error handler
 app.use((err, req, res, next) => {

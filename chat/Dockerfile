@@ -1,5 +1,13 @@
 FROM node:22
 
+RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc \
+  --create-dirs \
+  -o $HOME/minio-binaries/mc
+
+RUN chmod +x $HOME/minio-binaries/mc
+
+RUN cp ~/minio-binaries/mc /usr/local/bin/
+
 WORKDIR /usr/src/app
 
 COPY package*.json ./
