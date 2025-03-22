@@ -69,11 +69,6 @@ export function AppSidebar({ isOpen, onClose }) {
               >
                 <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
                 <span>{label}</span>
-                {path === '/messages' && unreadCount > 0 && (
-                  <span className="ml-auto bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
               </Link>
             ))}
           </nav>

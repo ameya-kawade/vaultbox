@@ -12,7 +12,7 @@ const sendMessage = (io, socket, redisAdapter) => {
   socket.on('message', async (messageData) => {
     try {
       // Use senderId, receiverId, and content to match the frontend payload.
-      const { senderId, receiverId, content } = messageData;
+      const { senderId, receiverId, content, fileIds } = messageData;
 
       // Check if the receiver exists.
       const receiverExists = await User.exists({ _id: receiverId });
@@ -46,6 +46,14 @@ const sendMessage = (io, socket, redisAdapter) => {
           content
         });
 
+        // If there are associated file IDs, update the files with the message ID
+        if (fileIds && Array.isArray(fileIds) && fileIds.length > 0) {
+          await File.updateMany(
+            { _id: { $in: fileIds } },
+            { messageId: savedMessage._id, messageType: 'PrivateMessage' }
+          );
+        }
+
         // Optionally, send an acknowledgment back to the sender.
         socket.emit('messageSent', { success: true, messageId: savedMessage._id });
       } else {
@@ -76,16 +84,24 @@ const fileSendNotify = (io, socket, redisAdapter) => {
         } else if (uploadedFiles && uploadedFiles.data && Array.isArray(uploadedFiles.data)) {
           filesArray = uploadedFiles.data;
         }
-        const fileRecords = filesArray.map(file => ({
-          userId: sender,
-          fileName: file.filename,
-          fileUrl: file.url,
-          fileSize: file.size,
-          bucketName: file.bucketName || "default-bucket",
-          uploadedAt: file.uploadedAt ? new Date(file.uploadedAt) : new Date(),
-          messageId: null
+        
+        // Create file records with proper user association
+        const fileRecords = await Promise.all(filesArray.map(async file => {
+          const fileRecord = await File.create({
+            userId: sender,
+            receiverId: receiver,
+            fileName: file.filename,
+            fileUrl: file.url,
+            fileSize: file.size,
+            bucketName: file.bucketName || "default-bucket",
+            uploadedAt: file.uploadedAt ? new Date(file.uploadedAt) : new Date(),
+            messageType: 'PrivateMessage'
+          });
+          return fileRecord._id;
         }));
-        await File.insertMany(fileRecords);
+        
+        // Emit the file IDs back to the sender so they can be included in the message
+        socket.emit('fileUploaded', { fileIds: fileRecords, receiver });
       } else {
         socket.emit('error', "Receiver doesn't exist");
       }

@@ -28,6 +28,23 @@ export const createMeeting = async (roomName) => {
 };
 
 /**
+ * Join an existing meeting
+ * @param {string} roomId - The ID of the meeting room to join
+ * @param {string} username - The username of the person joining
+ * @returns {Promise} - Response with joining details and token
+ */
+export const joinMeeting = async (roomId, username) => {
+  try {
+    // Simplify to just navigate directly to the meeting room
+    // No need to verify with backend first
+    return { roomId };
+  } catch (error) {
+    console.error('Error joining meeting:', error);
+    throw error;
+  }
+};
+
+/**
  * Delete a meeting
  * @param {string} roomName - The name of the meeting room to delete
  * @returns {Promise} - Response with deletion status
@@ -44,5 +61,6 @@ export const deleteMeeting = async (roomName) => {
 
 export default {
   createMeeting,
+  joinMeeting,
   deleteMeeting
 }; 

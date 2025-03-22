@@ -1,8 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useMemo } from "react"
 import { useChat } from "../hooks/useChat"
-import { useWebSocket } from "../hooks/useWebSocket"
 import ChatLayout from "../components/ChatLayout"
 import { useAuth } from "@login/context/auth"
 import { useNotifications } from "../../notifications/NotificationContext"
@@ -13,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus } from "lucide-react"
 import ChatService from "../../../services/chatService"
 import { toast } from "sonner"
+import { useCipher } from '@/components/Layout/Layout'
+import { encryptText } from "../utils/encryption"
 
 const Channels = () => {
   const {
@@ -25,7 +26,9 @@ const Channels = () => {
     error,
     fetchMessages,
     uploadFile,
-    refreshChats,
+    sendMessage,
+    socketConnected,
+    loading
   } = useChat("channel")
 
   const { user } = useAuth()
@@ -36,69 +39,67 @@ const Channels = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newChannel, setNewChannel] = useState({ name: "", description: "" })
   const [isCreating, setIsCreating] = useState(false)
+  const [sendingMessage, setSendingMessage] = useState(false)
+
+  // Access cipher mode from context
+  const { cipherMode } = useCipher()
 
   if (!user || !userId) {
     return <div>Loading user data...</div>
   }
 
-  // Handle incoming group messages.
-  const handleGrpMessage = useCallback(
-    (newMsg) => {
-      console.log("New group message received:", newMsg)
-      if (!newMsg.senderName) {
-        const sender = users.find((u) => String(u._id) === String(newMsg.senderId))
-        newMsg.senderName = sender ? sender.username : "Unknown"
-      }
-
-      // If message is for current channel, add to messages
-      if (currentChat && newMsg.channelId === currentChat._id) {
-        setMessages((prev) => [...prev, newMsg])
-      } else {
-        // If message is for another channel, create notification
-        const targetChannel = channels.find((c) => c._id === newMsg.channelId)
-        if (targetChannel) {
-          addNotification({
-            title: `New message in #${targetChannel.name}`,
-            message: `${newMsg.senderName}: ${newMsg.content}`,
-            chatId: newMsg.channelId,
-            chatType: "channel",
-          })
-
-          // Update unread count for the channel
-          refreshChats()
-        }
-      }
-    },
-    [currentChat, setMessages, users, channels, addNotification, refreshChats],
-  )
-
-  // Handle incoming notifications.
-  const handleNotification = useCallback(
-    (notificationData) => {
-      console.log("New notification received:", notificationData)
-      // Map content to message if message isn't provided.
-      addNotification({
-        ...notificationData,
-        message: notificationData.message || notificationData.content,
-      })
-    },
-    [addNotification],
-  )
-
-  const { sendMessage } = useWebSocket(userId, handleGrpMessage, handleNotification)
-
-  const handleSendMessage = (content) => {
-    if (!currentChat) return
+  const handleSendMessage = useCallback((content) => {
+    if (!currentChat || !content.trim()) return;
+    
+    // Create optimistic message
+    const tempId = `temp_${Date.now()}`;
+    const createdAt = new Date().toISOString(); // Ensure ISO string format for dates
     const messagePayload = {
+      _id: tempId,
       type: "channel_message",
       channelId: currentChat._id,
       senderId: userId,
       content,
-      createdAt: new Date().toISOString(),
+      createdAt,
+      senderName: user.username,
+      pending: true
+    };
+    
+    // Add optimistic message to UI
+    setMessages((prev) => [...prev, messagePayload]);
+    setSendingMessage(true);
+    
+    // Prepare socket message
+    const socketPayload = {
+      type: "channel_message",
+      channelId: currentChat._id,
+      senderId: userId,
+      content
+    };
+    
+    // Send the message
+    const success = sendMessage(socketPayload);
+    
+    if (!success) {
+      // If immediate sending failed, we'll retry automatically (handled in useChat)
+      toast.warning("Message queued for delivery", {
+        description: "You may be temporarily disconnected. We'll send it when reconnected."
+      });
     }
-    sendMessage(messagePayload)
-    setMessages((prev) => [...prev, { ...messagePayload, senderName: user.username }])
-  }
+    
+    // Update message to mark as sent
+    setTimeout(() => {
+      setMessages((prev) => 
+        prev.map(msg => 
+          msg._id === tempId 
+            ? { ...msg, pending: false }
+            : msg
+        )
+      );
+      setSendingMessage(false);
+    }, 500);
+    
+  }, [currentChat, userId, user?.username, sendMessage, setMessages]);
 
   // Create new channel
   const handleCreateChannel = async () => {
@@ -109,11 +110,21 @@ const Channels = () => {
 
     setIsCreating(true)
     try {
-      await ChatService.createChannel(newChannel)
+      const response = await ChatService.createChannel(newChannel)
       toast.success("Channel created successfully")
       setIsCreateDialogOpen(false)
       setNewChannel({ name: "", description: "" })
-      refreshChats() // Refresh the channels list
+      
+      // Refresh the channels list
+      if (refreshChats) {
+        refreshChats();
+      } else {
+        // Fallback to fetch channels directly via API 
+        const channelsResp = await ChatService.getChannels();
+        if (channelsResp.success && channelsResp.msg?.channels) {
+          setChats(channelsResp.msg.channels);
+        }
+      }
     } catch (error) {
       toast.error("Failed to create channel")
       console.error("Error creating channel:", error)
@@ -124,10 +135,44 @@ const Channels = () => {
 
   useEffect(() => {
     if (currentChat) {
-      setMessages([])
-      fetchMessages(currentChat)
+      console.log("Selected channel:", currentChat.name);
+      setMessages([]);
+      fetchMessages(currentChat);
     }
-  }, [currentChat, fetchMessages, setMessages])
+  }, [currentChat?._id, fetchMessages, setMessages]);
+
+  useEffect(() => {
+    // Update connection status for user feedback
+    if (!socketConnected) {
+      toast.warning("Connection lost", {
+        description: "Reconnecting to server...",
+        duration: 3000,
+      });
+    } else {
+      toast.dismiss();
+    }
+  }, [socketConnected]);
+
+  // Transform messages with encrypted text if cipher mode is enabled
+  const processedMessages = useMemo(() => {
+    if (!cipherMode) return messages;
+    
+    return messages.map(message => {
+      // Ensure message has a valid createdAt date
+      const safeMessage = {
+        ...message,
+        createdAt: message.createdAt || new Date().toISOString()
+      };
+      
+      // Use a safe fallback for encryption key
+      const encryptionKey = String(safeMessage._id || Date.now());
+      
+      return {
+        ...safeMessage,
+        content: encryptText(safeMessage.content, encryptionKey)
+      };
+    });
+  }, [messages, cipherMode]);
 
   if (error) return <div>Error: {error}</div>
 
@@ -146,10 +191,13 @@ const Channels = () => {
         chats={channels}
         currentChat={currentChat}
         setCurrentChat={setCurrentChat}
-        messages={messages}
+        messages={processedMessages}
         onSendMessage={handleSendMessage}
         onFileUpload={uploadFile}
         userId={userId}
+        isConnected={socketConnected}
+        isSending={sendingMessage}
+        loading={loading}
       />
 
       {/* Create Channel Dialog */}

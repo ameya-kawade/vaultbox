@@ -5,6 +5,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import renewPresignedUrl from "../utils/renewPresignedUrl.js";
 import { File } from "../models/file.model.js";
 import { Message } from "../models/message.model.js";
+import { User } from "../models/user.model.js";
+import { Channel } from "../models/channel.model.js";
 
 const minioClient = new Minio.Client({
   endPoint: process.env.MINIO_HOST,
@@ -20,8 +22,43 @@ const propogateFileMessage = async (req, res) => {
   }
 
   const uploadedFiles = [];
-
+  // Extract IDs from query params
+  const chatId = req.query.userId;  // For direct messages
+  const channelId = req.query.channelId;  // For channel messages
+  
   try {
+    // Get sender information for enhanced metadata
+    const sender = {
+      _id: req.user?.id || null,
+      username: req.user?.username || "Unknown User"
+    };
+
+    // Get chat or channel metadata if available
+    let chatName = null;
+    let channelName = null;
+
+    if (channelId) {
+      // Get channel information
+      try {
+        const channel = await Channel.findById(channelId);
+        if (channel) {
+          channelName = channel.name;
+        }
+      } catch (error) {
+        console.log("Error fetching channel info:", error);
+      }
+    } else if (chatId) {
+      // Get chat partner information
+      try {
+        const chatPartner = await User.findById(chatId);
+        if (chatPartner) {
+          chatName = chatPartner.username;
+        }
+      } catch (error) {
+        console.log("Error fetching chat partner info:", error);
+      }
+    }
+    
     for (const file of req.files) {
       // Upload file to storage bucket and destructure the response
       const { presignedUrl, bucketName } = await uploadToBucket(
@@ -29,18 +66,44 @@ const propogateFileMessage = async (req, res) => {
         file.mimetype,
       );
 
-      // Save file details in MongoDB with the correct fileUrl as a string
-      const newFile = await File.create({
+      // Prepare file data
+      const fileData = {
         fileName: file.originalname,
         mimetype: file.mimetype,
         fileSize: file.size,
-        fileUrl: presignedUrl, // Fixed: storing the string URL
+        fileUrl: presignedUrl,
         uploadedAt: new Date(),
-        userId: req.user?.id || null, // Ensuring user is authenticated
-        bucketName: bucketName, // Using the bucketName from uploadToBucket
-      });
+        userId: req.user?.id || null,
+        bucketName: bucketName,
+      };
+      
+      // Set appropriate message type and channel ID if applicable
+      if (channelId) {
+        fileData.channelId = channelId;
+        fileData.messageType = 'Message';
+      } else if (chatId) {
+        fileData.messageType = 'PrivateMessage';
+      }
 
-      uploadedFiles.push(newFile);
+      // Save file details in MongoDB
+      const newFile = await File.create(fileData);
+
+      // Prepare enhanced file metadata for frontend
+      const enhancedFile = {
+        _id: newFile._id,
+        fileName: newFile.fileName,
+        fileUrl: newFile.fileUrl,
+        fileSize: newFile.fileSize,
+        bucketName: newFile.bucketName,
+        uploadedAt: newFile.uploadedAt,
+        sender: sender,
+        chatId: chatId || null,
+        channelId: channelId || null,
+        chatName: chatName,
+        channelName: channelName
+      };
+
+      uploadedFiles.push(enhancedFile);
     }
 
     req.uploadedFiles = uploadedFiles; // Attach file metadata to req object

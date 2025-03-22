@@ -3,6 +3,7 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Channel } from "../../models/channel.model.js";
 import { User } from "../../models/user.model.js";
 import { Message } from "../../models/message.model.js";
+import { File } from "../../models/file.model.js";
 
 const getChat = async (req, res, next) => {
   try {
@@ -14,22 +15,45 @@ const getChat = async (req, res, next) => {
     const pageNum = parseInt(req.query.page, 10) || 1;
     const limitNum = parseInt(req.query.limit, 10) || 10;
 
+    // Get messages for this channel
     const messages = await Message.find({ channelId: channelId })
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
 
+    // Get total message count
     const totalMessages = await Message.countDocuments({
       channelId: channelId,
     });
     const totalPages = Math.ceil(totalMessages / limitNum);
+    
+    // Get associated files for each message
+    const messagesWithFiles = await Promise.all(messages.map(async (message) => {
+      const files = await File.find({ 
+        messageId: message._id, 
+        messageType: 'Message',
+        channelId: channelId
+      });
+      
+      const msgObj = message.toObject();
+      msgObj.files = files;
+      return msgObj;
+    }));
+    
+    // Get orphaned files (files not attached to messages)
+    const orphanedFiles = await File.find({
+      messageId: null,
+      messageType: 'Message',
+      channelId: channelId
+    });
 
     return res.status(200).json(
       new ApiResponse(
         200,
         "Chat messages retrieved successfully.",
         {
-          messages,
+          messages: messagesWithFiles,
+          orphanedFiles,
           currentPage: pageNum,
           totalPages,
           totalMessages,
@@ -47,7 +71,10 @@ const getChat = async (req, res, next) => {
 
 const getChannels = async (req, res, next) => {
   try {
-    const channels = await Channel.find();
+    const { id: userId } = req.user;
+    
+    // Only fetch channels where the user is a member
+    const channels = await Channel.find({ members: userId });
 
     if (!channels || channels.length === 0) {
       return res

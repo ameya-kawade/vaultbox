@@ -10,7 +10,6 @@ import { login, verifyOTP } from "@/services/autheService"
 import { generateKyber768KeyPair } from '@/utils/kyberUtils';
 import { storePrivateKey } from '@/utils/indexedDBUtils';
 
-
 export default function LoginPage() {
   const { handleLoginSuccess } = useAuth()
   const navigate = useNavigate()
@@ -54,23 +53,32 @@ export default function LoginPage() {
       handleLoginSuccess(response.user)
       navigate("/dashboard")
 
-      // 🔹 After navigating, generate and store keys
+      // Generate and store keys after successful OTP verification
       setTimeout(async () => {
-        // Generate Kyber keys
-        const { privateKey, publicKey } = generateKyber768KeyPair();
+        try {
+          const { privateKey, publicKey } = await generateKyber768KeyPair();
+          await storePrivateKey(privateKey);
 
-        // Store private key in IndexedDB
-        await storePrivateKey(privateKey);
-
-        // Send public key to backend
-        await fetch('/api/storePublicKey', {
+          // Send public key to backend
+          const apiResponse = await fetch('/api/storePublicKey', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ publicKey }),
-        });
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            },
+            body: JSON.stringify({
+              userId: response.user.id,
+              publicKey
+            }),
+          });
 
-        console.log("Keys successfully generated and stored!");
-    }, 1000); // Delay to ensure navigation completes
+          if (!apiResponse.ok) {
+            throw new Error(`Failed to store public key: ${apiResponse.status}`);
+          }
+        } catch (err) {
+          console.error("Error storing keys:", err);
+        }
+      }, 1000);
 
     } catch (error) {
       console.error("Error during OTP verification:", error.message)
@@ -91,4 +99,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

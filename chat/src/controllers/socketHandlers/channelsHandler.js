@@ -71,7 +71,7 @@ const channelsHandler = async (socket) => {
 function sendMessage(socket) {
   socket.on('grpMessage', async (data) => {
     try {
-      const { channelId, senderId, content } = data;
+      const { channelId, senderId, content, fileIds } = data;
       if (!channelId || !senderId || !content) {
         throw new Error("Missing required message data");
       }
@@ -111,10 +111,29 @@ function sendMessage(socket) {
       });
       
       // Save the message to the database with consistent ID format
-      await Message.create({ 
+      const savedMessage = await Message.create({ 
         channelId, 
         senderId: senderIdStr, 
         content 
+      });
+
+      // If there are associated file IDs, update the files with the message ID
+      if (fileIds && Array.isArray(fileIds) && fileIds.length > 0) {
+        await File.updateMany(
+          { _id: { $in: fileIds } },
+          { 
+            messageId: savedMessage._id, 
+            messageType: 'Message',
+            channelId: channelId
+          }
+        );
+      }
+      
+      // Send the message ID back to the sender
+      socket.emit('messageSent', { 
+        success: true, 
+        messageId: savedMessage._id,
+        channelId: channelId
       });
       
       console.log(`Message sent by ${sender.username} in channel ${channelId}`);
@@ -128,22 +147,38 @@ function sendMessage(socket) {
 function fileSendNotify(socket) {
   socket.on('grpFileSendNotify', async (data) => {
     try {
-      const { channelId, userId, fileName, fileUrl, fileSize } = data;
+      const { channelId, userId, uploadedFiles } = data;
       // Check if the channel exists.
       const channelExists = await Channel.exists({ _id: channelId });
       if (channelExists) {
         // Broadcast the file send notification.
         socket.broadcast.to(channelId).emit('grpFileSendNotify', data);
-        // Save the file information to the database.
-        await File.create({ 
-          userId, 
-          fileName, 
-          fileUrl, 
-          fileSize, 
-          bucketName: "default-bucket", // Adjust as needed.
-          uploadedAt: new Date(),
-          messageId: null // Link to a message if required.
-        });
+        
+        // Process files
+        let filesArray = [];
+        if (Array.isArray(uploadedFiles)) {
+          filesArray = uploadedFiles;
+        } else if (uploadedFiles && uploadedFiles.data && Array.isArray(uploadedFiles.data)) {
+          filesArray = uploadedFiles.data;
+        }
+        
+        // Create file records with proper channel association
+        const fileRecords = await Promise.all(filesArray.map(async file => {
+          const fileRecord = await File.create({ 
+            userId, 
+            fileName: file.fileName || file.filename, 
+            fileUrl: file.fileUrl || file.url, 
+            fileSize: file.fileSize || file.size, 
+            bucketName: file.bucketName || "default-bucket",
+            uploadedAt: file.uploadedAt ? new Date(file.uploadedAt) : new Date(),
+            messageType: 'Message',
+            channelId: channelId
+          });
+          return fileRecord._id;
+        }));
+        
+        // Emit the file IDs back to the sender so they can be included in a message
+        socket.emit('filesUploaded', { fileIds: fileRecords, channelId });
       } else {
         socket.emit('error', "Channel doesn't exist");
       }

@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound"
 import { Loading } from "@/components/ui/loading"
 import LoginPage from "./features/login/pages/login-page.jsx"
 import { NotificationsProvider } from "./features/notifications/NotificationContext"
+import LandingPage from "./components/LandingPage"
 
 const queryClient = new QueryClient()
 
@@ -29,7 +30,7 @@ function ProtectedRoute({ children }) {
 
 function AppContent() {
   // Access the auth context safely inside AuthProvider
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, isAuthenticated } = useAuth()
   const userId = user?.id
 
   // Optionally, add an initial loading state (for example, to display a loader during startup)
@@ -43,16 +44,22 @@ function AppContent() {
     return <Loading />
   }
 
+  // We'll pass isAuthenticated to the LandingPage component
+  const landingPage = <LandingPage isAuthenticated={isAuthenticated} userId={userId} />
+
   return (
     // Wrap routes with NotificationsProvider now that we have a valid userId
     <NotificationsProvider userId={userId}>
       <Routes>
-        {/* Public Route */}
+        {/* Public routes that are accessible to all users */}
+        <Route path="/page" element={landingPage} />
         <Route path="/login" element={<LoginPage />} />
-
-        {/* Protected Routes */}
+        <Route path="/register" element={<LoginPage />} />
+        
+        {/* Protected routes */}
         <Route element={<AuthWrapper />}>
           <Route element={<Layout />}>
+            {/* Redirect /dashboard to / for logged in users who manually enter /dashboard */}
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route
               path="/dashboard"
